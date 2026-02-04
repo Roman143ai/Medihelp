@@ -2,16 +2,20 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { MedicalRecord, Prescription } from "../types";
 
+// Helper to initialize AI with current key
+const getAI = () => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    throw new Error("API_KEY found to be empty. Please check environment configuration.");
+  }
+  return new GoogleGenAI({ apiKey });
+};
+
 /**
  * রোগের লক্ষণ বিশ্লেষণ করে ডিজিটাল প্রেসক্রিপশন তৈরি করে
  */
 export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): Promise<Prescription> => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    throw new Error("এপিআই কী পাওয়া যায়নি। অনুগ্রহ করে সেটিংস চেক করুন।");
-  }
-
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = getAI();
   
   const finalName = record.patientName || userInfo.name;
   const finalAge = record.patientAge || userInfo.age;
@@ -38,10 +42,11 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            diagnosis: { type: Type.STRING },
-            advice: { type: Type.STRING },
+            diagnosis: { type: Type.STRING, description: "রোগের নাম বা রোগ নির্ণয়" },
+            advice: { type: Type.STRING, description: "রোগীর জন্য উপদেশ" },
             medicines: {
               type: Type.ARRAY,
+              description: "ঔষধের তালিকা",
               items: {
                 type: Type.OBJECT,
                 properties: {
@@ -51,23 +56,21 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
                   purpose: { type: Type.STRING },
                   dosage: { type: Type.STRING }
                 },
-                required: ["englishName", "bengaliName", "genericName", "purpose", "dosage"],
-                propertyOrdering: ["englishName", "bengaliName", "genericName", "purpose", "dosage"]
+                required: ["englishName", "bengaliName", "genericName", "purpose", "dosage"]
               }
             }
           },
-          required: ["diagnosis", "advice", "medicines"],
-          propertyOrdering: ["diagnosis", "advice", "medicines"]
+          required: ["diagnosis", "advice", "medicines"]
         }
       }
     });
 
     const text = response.text;
-    if (!text) throw new Error("এআই কোনো উত্তর প্রদান করেনি।");
+    if (!text) throw new Error("AI returned empty content");
 
     const result = JSON.parse(text);
     return {
-      id: Math.random().toString(36).substr(2, 9).toUpperCase(),
+      id: "RX" + Math.random().toString(36).substr(2, 6).toUpperCase(),
       userId: userInfo.id,
       patientName: finalName,
       patientAge: finalAge,
@@ -76,8 +79,8 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
       ...result
     };
   } catch (error: any) {
-    console.error("AI Diagnosis Error:", error);
-    throw new Error("সার্ভার থেকে রেসপন্স পেতে সমস্যা হচ্ছে। দয়া করে কিছুক্ষণ পর আবার চেষ্টা করুন। " + (error.message || ""));
+    console.error("Diagnosis Error:", error);
+    throw new Error("এআই সার্ভারের সাথে সংযোগ করা যাচ্ছে না। দয়া করে আপনার ইন্টারনেট এবং সেটিংস চেক করুন। " + (error.message || ""));
   }
 };
 
@@ -85,19 +88,16 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
  * ঔষধের কার্যকারিতা সম্পর্কে তথ্য দেয়
  */
 export const getMedicineInfo = async (query: string): Promise<string> => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) return "এপিআই কী পাওয়া যায়নি।";
-
-  const ai = new GoogleGenAI({ apiKey });
   try {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `ঔষধ "${query}" এর কাজ, ব্যবহার এবং সতর্কতা বাংলায় বিস্তারিত লিখুন যাতে সাধারণ মানুষ সহজে বুঝতে পারে।`
+      contents: `ঔষধ "${query}" এর কাজ, ব্যবহার এবং সতর্কতা বাংলায় বিস্তারিত লিখুন যাতে সাধারণ মানুষ সহজে বুঝতে পারে। বিষয়গুলো পয়েন্ট আকারে লিখুন।`
     });
     return response.text || 'দুঃখিত, কোনো তথ্য পাওয়া যায়নি।';
   } catch (error: any) {
     console.error("Medicine Info Error:", error);
-    return "দুঃখিত, তথ্য সংগ্রহে সমস্যা হয়েছে। ইন্টারনেট কানেকশন চেক করুন। " + (error.message || "");
+    return "দুঃখিত, তথ্য সংগ্রহে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।";
   }
 };
 
@@ -105,11 +105,8 @@ export const getMedicineInfo = async (query: string): Promise<string> => {
  * ঔষধের বিকল্প ব্র্যান্ড খুঁজে বের করে
  */
 export const findAlternatives = async (query: string): Promise<any[]> => {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) return [];
-
-    const ai = new GoogleGenAI({ apiKey });
     try {
+        const ai = getAI();
         const response = await ai.models.generateContent({
             model: "gemini-3-flash-preview",
             contents: `"${query}" ঔষধের বাংলাদেশের সেরা বিকল্প ব্র্যান্ডগুলোর একটি তালিকা দিন।`,
@@ -120,13 +117,12 @@ export const findAlternatives = async (query: string): Promise<any[]> => {
                     items: {
                         type: Type.OBJECT,
                         properties: {
-                            name: { type: Type.STRING },
-                            company: { type: Type.STRING },
-                            price: { type: Type.STRING },
-                            generic: { type: Type.STRING }
+                            name: { type: Type.STRING, description: "Brand Name" },
+                            company: { type: Type.STRING, description: "Manufacturer" },
+                            price: { type: Type.STRING, description: "Approx Price" },
+                            generic: { type: Type.STRING, description: "Generic Name" }
                         },
-                        required: ["name", "company", "price", "generic"],
-                        propertyOrdering: ["name", "company", "price", "generic"]
+                        required: ["name", "company", "price", "generic"]
                     }
                 }
             }
@@ -135,7 +131,7 @@ export const findAlternatives = async (query: string): Promise<any[]> => {
         if (!text) return [];
         return JSON.parse(text);
     } catch (error: any) {
-        console.error("Alternatives Error:", error);
+        console.error("Alternatives Search Error:", error);
         return [];
     }
 };
