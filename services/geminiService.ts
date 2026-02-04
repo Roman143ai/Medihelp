@@ -2,17 +2,13 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { MedicalRecord, Prescription } from "../types";
 
-// Always initialize with the shimmed process.env.API_KEY
-const initAI = () => {
-  const apiKey = (window as any).process?.env?.API_KEY || "";
-  if (!apiKey) {
-    console.error("Critical: API_KEY is missing from the environment.");
-  }
-  return new GoogleGenAI({ apiKey });
-};
-
+/**
+ * রোগের লক্ষণ বিশ্লেষণ করে ডিজিটাল প্রেসক্রিপশন তৈরি করে
+ */
 export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): Promise<Prescription> => {
-  const ai = initAI();
+  // Direct initialization with the shimmed key
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
   const finalName = record.patientName || userInfo.name;
   const finalAge = record.patientAge || userInfo.age;
   const finalGender = record.patientGender || userInfo.gender;
@@ -23,7 +19,6 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
     বর্তমান লক্ষণ: ${record.symptoms.join(", ")}, অন্যান্য: ${record.customSymptoms}
     পূর্ববর্তী রোগ: ${record.prevIllnesses.join(", ")}, অন্যান্য: ${record.customPrevIllnesses}
     ব্যব্যহৃত ঔষধ: ${record.pastMeds}
-    টেস্ট রিপোর্ট: ${JSON.stringify(record.tests.map(t => ({ name: t.name, result: t.result })))}
     ভাইটালস: রক্তচাপ: ${record.bp}, ডায়াবেটিস: ${record.diabetes}
 
     কাজ: আপনি একজন বিশেষজ্ঞ ডাক্তার। উপরের তথ্যের ভিত্তিতে রোগীর রোগ নির্ণয় করুন এবং একটি ডিজিটাল প্রেসক্রিপশন তৈরি করুন।
@@ -32,7 +27,7 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview", 
+      model: "gemini-3-pro-preview", // Complex task demands Pro model
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -52,19 +47,21 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
                   purpose: { type: Type.STRING },
                   dosage: { type: Type.STRING }
                 },
-                required: ["englishName", "bengaliName", "genericName", "purpose", "dosage"]
+                required: ["englishName", "bengaliName", "genericName", "purpose", "dosage"],
+                propertyOrdering: ["englishName", "bengaliName", "genericName", "purpose", "dosage"]
               }
             }
           },
-          required: ["diagnosis", "advice", "medicines"]
+          required: ["diagnosis", "advice", "medicines"],
+          propertyOrdering: ["diagnosis", "advice", "medicines"]
         }
       }
     });
 
     const text = response.text;
-    if (!text) throw new Error("AI returned no response.");
+    if (!text) throw new Error("AI returned empty text");
 
-    const result = JSON.parse(text.trim());
+    const result = JSON.parse(text);
     return {
       id: Math.random().toString(36).substr(2, 9).toUpperCase(),
       userId: userInfo.id,
@@ -75,31 +72,37 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
       ...result
     };
   } catch (error) {
-    console.error("Diagnosis Error:", error);
-    throw error;
+    console.error("Diagnosis API Error:", error);
+    throw new Error("রোগ নির্ণয় করতে সমস্যা হয়েছে। দয়া করে আবার চেষ্টা করুন।");
   }
 };
 
+/**
+ * ঔষধের কার্যকারিতা সম্পর্কে তথ্য দেয়
+ */
 export const getMedicineInfo = async (query: string): Promise<string> => {
-  const ai = initAI();
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `ঔষধ "${query}" এর কাজ এবং ব্যবহার বাংলায় বিস্তারিত লিখুন যাতে সাধারণ মানুষ বুঝতে পারে।`
+      contents: `ঔষধ "${query}" এর কাজ, ব্যবহার এবং সতর্কতা বাংলায় বিস্তারিত লিখুন যাতে সাধারণ মানুষ সহজে বুঝতে পারে।`
     });
     return response.text || 'দুঃখিত, কোনো তথ্য পাওয়া যায়নি।';
   } catch (error) {
     console.error("Medicine Info Error:", error);
-    return "দুঃখিত, তথ্য সংগ্রহে সমস্যা হয়েছে।";
+    return "দুঃখিত, তথ্য সংগ্রহে সমস্যা হয়েছে। ইন্টারনেট চেক করুন।";
   }
 };
 
+/**
+ * ঔষধের বিকল্প ব্র্যান্ড খুঁজে বের করে
+ */
 export const findAlternatives = async (query: string): Promise<any[]> => {
-    const ai = initAI();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     try {
         const response = await ai.models.generateContent({
             model: "gemini-3-flash-preview",
-            contents: `"${query}" ঔষধের বাংলাদেশের সেরা বিকল্প ব্র্যান্ডগুলোর একটি তালিকা JSON ফরম্যাটে দিন।`,
+            contents: `"${query}" ঔষধের বাংলাদেশের সেরা বিকল্প ব্র্যান্ডগুলোর একটি তালিকা দিন।`,
             config: {
                 responseMimeType: "application/json",
                 responseSchema: {
@@ -112,16 +115,17 @@ export const findAlternatives = async (query: string): Promise<any[]> => {
                             price: { type: Type.STRING },
                             generic: { type: Type.STRING }
                         },
-                        required: ["name", "company", "price", "generic"]
+                        required: ["name", "company", "price", "generic"],
+                        propertyOrdering: ["name", "company", "price", "generic"]
                     }
                 }
             }
         });
         const text = response.text;
         if (!text) return [];
-        return JSON.parse(text.trim());
+        return JSON.parse(text);
     } catch (error) {
-        console.error("Alternatives Error:", error);
+        console.error("Alternatives API Error:", error);
         return [];
     }
 };
