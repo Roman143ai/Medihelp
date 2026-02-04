@@ -166,7 +166,7 @@ const Login: React.FC<LoginProps> = ({ users, onLogin, onRegister }) => {
           </div>
           
           <div className="mt-12 pt-8 border-t border-slate-100 flex justify-center">
-            <p className="text-[10px] font-black text-slate-300 uppercase tracking-[.3em]">Health Care Reimagined</p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center px-4">Copyright © Rimon Mahmud Roman © 2026. All rights reserved.</p>
           </div>
         </div>
       </div>

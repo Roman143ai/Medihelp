@@ -1,22 +1,24 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { User, AdminSettings, MedicinePrice, Order, MedicalRecord, Prescription } from '../types';
 import { THEMES, DEFAULT_SYMPTOMS, PREV_ILLNESSES, DEFAULT_TESTS } from '../constants';
 import { 
   User as UserIcon, LogOut, Stethoscope, Search, ShoppingBag, 
   Settings, Bell, CreditCard, Camera, FileText, Download, X,
   Heart, Home, MapPin, PhoneCall, Gift, CheckCircle, Activity,
-  ChevronRight, Calendar, UserCheck, Droplet, Thermometer, ArrowRight, Sparkles, Edit3, Save, Plus, MessageSquare, ClipboardList, Info, FileSearch, ExternalLink, FileSpreadsheet, Presentation, Mail, History, Zap, Trash2, CameraIcon, ImageIcon, Loader2
+  ChevronRight, Calendar, UserCheck, Droplet, Thermometer, ArrowRight, Sparkles, Edit3, Save, Plus, MessageSquare, ClipboardList, Info, FileSearch, ExternalLink, FileSpreadsheet, Presentation, Mail, History, Zap, Trash2, CameraIcon, ImageIcon, Loader2, Scissors, KeyRound
 } from 'lucide-react';
+import Cropper from 'react-easy-crop';
 import { generateDiagnosis, getMedicineInfo, findAlternatives } from '../services/geminiService';
 import PrescriptionView from './PrescriptionView';
+import { getCroppedImg } from '../utils/cropImage';
 
 interface UserPanelProps {
   user: User;
   settings: AdminSettings;
   priceList: MedicinePrice[];
   orders: Order[];
-  onUpdateUser: (user: User) => void;
+  onUpdateUser: (user: User, oldId?: string) => void;
   onPlaceOrder: (order: Order) => void;
   onLogout: () => void;
 }
@@ -46,6 +48,13 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
   
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [tempUser, setTempUser] = useState<User>(user);
+
+  // Cropper states
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
+  const [isCropping, setIsCropping] = useState(false);
 
   const SLIDES_LINK = "https://docs.google.com/presentation/d/1Zx6gjOPPDPDaFo0-vrALBKkfjGb7wqRsKg7JhwTJyz0/edit?usp=sharing";
   const SHEETS_LINK = "https://docs.google.com/spreadsheets/d/1YJmYfQMw1H8M4ocdaU5TDsPOJPwCTCJCS01z1wjP1U0/edit?usp=sharing";
@@ -100,11 +109,40 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
     setLoading(false);
   };
 
+  const onCropComplete = useCallback((_croppedArea: any, pixelCrop: any) => {
+    setCroppedAreaPixels(pixelCrop);
+  }, []);
+
+  const handleSaveCroppedImage = async () => {
+    setIsCropping(true);
+    try {
+      if (imageToCrop && croppedAreaPixels) {
+        const croppedImage = await getCroppedImg(imageToCrop, croppedAreaPixels);
+        setTempUser({ ...tempUser, profilePic: croppedImage });
+        setImageToCrop(null);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    setIsCropping(false);
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => setCurrentTest({ ...currentTest, image: reader.result as string });
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleProfilePicSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImageToCrop(reader.result as string);
+      };
       reader.readAsDataURL(file);
     }
   };
@@ -116,7 +154,11 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
   };
 
   const handleSaveProfile = () => {
-    onUpdateUser(tempUser);
+    if (!tempUser.id.trim() || !tempUser.password.trim()) {
+      alert("ইউজার আইডি এবং পাসওয়ার্ড অবশ্যই প্রদান করতে হবে।");
+      return;
+    }
+    onUpdateUser(tempUser, user.id);
     setIsEditingProfile(false);
   };
 
@@ -124,6 +166,59 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
 
   return (
     <div className="min-h-screen bg-[#f1f5f9] text-slate-900 pb-28">
+      {/* Dynamic Image Cropper Modal */}
+      {imageToCrop && (
+        <div className="fixed inset-0 z-[2000] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-lg rounded-[40px] overflow-hidden flex flex-col h-[80vh] shadow-2xl animate-in zoom-in-95 duration-300">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+               <h3 className="text-xl font-black text-slate-900 flex items-center gap-3"><Scissors size={20} className="text-red-600"/> ফটো ক্রপ করুন</h3>
+               <button onClick={() => setImageToCrop(null)} className="p-2 bg-slate-50 rounded-full text-slate-400 hover:text-slate-600 transition-all"><X size={20}/></button>
+            </div>
+            
+            <div className="flex-1 relative bg-slate-100">
+               <Cropper
+                  image={imageToCrop}
+                  crop={crop}
+                  zoom={zoom}
+                  aspect={1}
+                  onCropChange={setCrop}
+                  onCropComplete={onCropComplete}
+                  onZoomChange={setZoom}
+                  cropShape="round"
+                  showGrid={false}
+               />
+            </div>
+
+            <div className="p-8 space-y-6">
+               <div className="space-y-4">
+                  <div className="flex justify-between items-center px-1">
+                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">জুম লেভেল</span>
+                     <span className="text-xs font-black text-red-600">{Math.round(zoom * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    value={zoom}
+                    min={1}
+                    max={3}
+                    step={0.1}
+                    aria-labelledby="Zoom"
+                    onChange={(e) => setZoom(Number(e.target.value))}
+                    className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-red-600"
+                  />
+               </div>
+               
+               <div className="flex gap-4">
+                  <button onClick={() => setImageToCrop(null)} className="flex-1 py-5 bg-slate-100 text-slate-600 rounded-[20px] font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all">বাতিল</button>
+                  <button onClick={handleSaveCroppedImage} disabled={isCropping} className="flex-1 py-5 bg-red-600 text-white rounded-[20px] font-black text-xs uppercase tracking-widest shadow-xl shadow-red-200 hover:bg-red-700 transition-all flex items-center justify-center gap-2">
+                     {isCropping ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16}/>}
+                     {isCropping ? 'প্রসেসিং...' : 'সেভ করুন'}
+                  </button>
+               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Smart Loading Overlay */}
       {loading && (
         <div className="fixed inset-0 z-[1000] bg-white/95 backdrop-blur-xl flex items-center justify-center p-6 text-center overflow-hidden">
@@ -488,22 +583,15 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
         )}
 
         {activeTab === 'profile' && (
-           <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div className="bg-white p-10 rounded-[40px] border border-slate-200 flex flex-col items-center shadow-sm">
+           <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 pb-20">
+              <div className="bg-white p-10 rounded-[40px] border border-slate-200 flex flex-col items-center shadow-sm h-fit">
                  <div className="relative mb-6">
                     <div className="w-40 h-40 rounded-full border-8 border-slate-50 shadow-2xl bg-slate-100 flex items-center justify-center overflow-hidden">
                        {tempUser.profilePic ? <img src={tempUser.profilePic} className="w-full h-full object-cover" /> : <UserIcon size={64} className="text-slate-300" />}
                     </div>
                     {isEditingProfile && (
                        <label className="absolute bottom-2 right-2 p-3 bg-red-600 text-white rounded-full cursor-pointer shadow-xl">
-                          <Camera size={20}/><input type="file" className="hidden" accept="image/*" onChange={e => {
-                             const file = e.target.files?.[0];
-                             if (file) {
-                                const reader = new FileReader();
-                                reader.onloadend = () => setTempUser({...tempUser, profilePic: reader.result as string});
-                                reader.readAsDataURL(file);
-                             }
-                          }} />
+                          <Camera size={20}/><input type="file" className="hidden" accept="image/*" onChange={handleProfilePicSelect} />
                        </label>
                     )}
                  </div>
@@ -515,14 +603,21 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
               </div>
 
               <div className="md:col-span-2 bg-white p-10 rounded-[40px] border border-slate-200 shadow-sm space-y-6">
-                 <p className="text-xs font-black text-slate-400 uppercase tracking-widest">ব্যক্তিগত তথ্যসমূহ</p>
+                 <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-blue-100 text-blue-600 rounded-xl"><UserCheck size={20}/></div>
+                    <p className="text-sm font-black text-slate-900 uppercase tracking-widest">ব্যক্তিগত তথ্যসমূহ</p>
+                 </div>
                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <ProfileField label="পূর্ণ নাম" value={tempUser.name} readOnly={!isEditingProfile} onChange={(v: string) => setTempUser({...tempUser, name: v})} />
+                    <ProfileField label="ইউজার আইডি" value={tempUser.id} readOnly={!isEditingProfile} onChange={(v: string) => setTempUser({...tempUser, id: v})} />
+                    <ProfileField label="পাসওয়ার্ড" value={tempUser.password} readOnly={!isEditingProfile} onChange={(v: string) => setTempUser({...tempUser, password: v})} type="password" />
                     <ProfileField label="বয়স" value={tempUser.age || ''} readOnly={!isEditingProfile} onChange={(v: string) => setTempUser({...tempUser, age: v})} />
                     <ProfileField label="মোবাইল নম্বর" value={tempUser.mobile || ''} readOnly={!isEditingProfile} onChange={(v: string) => setTempUser({...tempUser, mobile: v})} />
                     <ProfileField label="রক্তের গ্রুপ" value={tempUser.bloodGroup || ''} readOnly={!isEditingProfile} onChange={(v: string) => setTempUser({...tempUser, bloodGroup: v})} />
-                    <ProfileField label="ঠিকানা" value={tempUser.address || ''} readOnly={!isEditingProfile} onChange={(v: string) => setTempUser({...tempUser, address: v})} />
-                    <div className="space-y-1 bg-slate-50 p-4 rounded-3xl">
+                    <div className="sm:col-span-2">
+                      <ProfileField label="ঠিকানা" value={tempUser.address || ''} readOnly={!isEditingProfile} onChange={(v: string) => setTempUser({...tempUser, address: v})} />
+                    </div>
+                    <div className="sm:col-span-2 space-y-1 bg-slate-50 p-4 rounded-3xl border border-slate-100">
                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">থিম পরিবর্তন করুন</p>
                        <select disabled={!isEditingProfile} className="w-full bg-transparent text-sm font-bold outline-none" value={tempUser.themeIndex} onChange={e => setTempUser({...tempUser, themeIndex: Number(e.target.value)})}>
                           {THEMES.map((t, i) => <option key={i} value={i}>{t.name}</option>)}
@@ -609,17 +704,20 @@ const CompactBento = ({ icon, title, color, onClick }: any) => (
   </div>
 );
 
-const ProfileField = ({ label, value, onChange, readOnly }: any) => (
-  <div className="space-y-1 bg-slate-50 p-4 rounded-3xl relative overflow-hidden group border border-transparent focus-within:border-red-200 transition-all">
+const ProfileField = ({ label, value, onChange, readOnly, type = "text" }: any) => (
+  <div className="space-y-1 bg-slate-50 p-4 rounded-3xl relative overflow-hidden group border border-transparent focus-within:border-red-200 transition-all h-full">
     <ECGLine opacity="opacity-10" height="h-full" />
     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest relative z-10">{label}</p>
-    <input 
-      type="text" 
-      readOnly={readOnly}
-      value={value} 
-      onChange={(e) => onChange(e.target.value)} 
-      className={`w-full bg-transparent text-sm font-bold outline-none relative z-10 ${readOnly ? 'cursor-default' : 'text-red-600'}`} 
-    />
+    <div className="relative flex items-center">
+       {type === 'password' && !readOnly && <KeyRound size={14} className="absolute left-0 text-red-400 mr-2 z-10" />}
+       <input 
+         type={type} 
+         readOnly={readOnly}
+         value={value} 
+         onChange={(e) => onChange(e.target.value)} 
+         className={`w-full bg-transparent text-sm font-bold outline-none relative z-10 ${readOnly ? 'cursor-default' : 'text-red-600'} ${type === 'password' && !readOnly ? 'pl-5' : ''}`} 
+       />
+    </div>
   </div>
 );
 

@@ -104,10 +104,28 @@ const App: React.FC = () => {
           settings={adminSettings}
           priceList={priceList}
           orders={orders.filter(o => o.userId === currentUser?.id)}
-          onUpdateUser={(updated) => {
-            const newUsers = users.map(u => u.id === updated.id ? updated : u);
+          onUpdateUser={(updated, oldId) => {
+            const targetId = oldId || updated.id;
+            
+            // Uniqueness check for ID change
+            if (oldId && oldId !== updated.id) {
+              const exists = users.find(u => u.id === updated.id);
+              if (exists) {
+                alert("এই ইউজার আইডিটি ইতিমধ্যে ব্যবহৃত হচ্ছে। অনুগ্রহ করে অন্য আইডি চেষ্টা করুন।");
+                return;
+              }
+            }
+
+            const newUsers = users.map(u => u.id === targetId ? updated : u);
             saveUsers(newUsers);
             setCurrentUser(updated);
+
+            // Update orders if ID changed
+            if (oldId && oldId !== updated.id) {
+              const newOrders = orders.map(o => o.userId === oldId ? { ...o, userId: updated.id } : o);
+              setOrders(newOrders);
+              localStorage.setItem('mh_orders', JSON.stringify(newOrders));
+            }
           }}
           onPlaceOrder={(order) => {
             const newOrders = [...orders, order];
