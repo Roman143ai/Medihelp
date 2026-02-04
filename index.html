@@ -9,6 +9,14 @@
     <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <!-- html2pdf.js for direct PDF downloads -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script>
+        // Shim for process.env to prevent ReferenceErrors in the browser
+        window.process = {
+            env: {
+                API_KEY: "" // Will be injected by the environment
+            }
+        };
+    </script>
     <style>
         :root {
             --primary: #0f172a;
@@ -160,5 +168,6 @@
         <path class="heartbeat-path" d="M0,50 L200,50 L210,40 L220,60 L230,20 L240,80 L250,50 L450,50 L460,40 L470,60 L480,20 L490,80 L500,50 L700,50 L710,40 L720,60 L730,20 L740,80 L750,50 L1000,50" />
     </svg>
     <div id="root"></div>
+    <script type="module" src="./index.tsx"></script>
 </body>
 </html>
