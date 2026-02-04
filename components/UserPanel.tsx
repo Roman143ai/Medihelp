@@ -100,6 +100,7 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
   const showPrescription = (p: Prescription) => {
     window.history.pushState({ view: 'prescription' }, '');
     setPrescription(p);
+    setActiveTab('diagnosis'); // Switch to diagnosis tab to view the prescription
   };
 
   const startEditing = () => {
@@ -149,7 +150,8 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
       const result = await generateDiagnosis(record, user);
       if (result) {
         const currentPrescriptions = user.prescriptions || [];
-        const updatedPrescriptions = [result, ...currentPrescriptions].slice(0, 10);
+        // Limit history to 5 items, removing the oldest one automatically
+        const updatedPrescriptions = [result, ...currentPrescriptions].slice(0, 5);
         onUpdateUser({ ...user, prescriptions: updatedPrescriptions });
         showPrescription(result);
       }
