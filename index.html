@@ -10,13 +10,12 @@
     <!-- html2pdf.js for direct PDF downloads -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script>
-        // Define process globally to ensure compatibility across all environments (Local, Vercel, AI Studio)
+        // Critical: Provide global process.env.API_KEY for the SDK in all environments
         window.process = {
             env: {
                 API_KEY: "AIzaSyBfbbCMILXCnI20QzuU6iARWPnFAwFyCps"
             }
         };
-        // Also define as a var to ensure it's picked up by code using it as a global
         var process = window.process;
     </script>
     <style>

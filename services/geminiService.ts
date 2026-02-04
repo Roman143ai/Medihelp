@@ -2,26 +2,14 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { MedicalRecord, Prescription } from "../types";
 
-// Enhanced API key retrieval for production (Vercel/Browser)
+// The API key is obtained from the global process.env.API_KEY shimmed in index.html
 const getApiKey = () => {
-  let key = "";
-  try {
-    // 1. Try process.env
-    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-      key = process.env.API_KEY;
-    }
-  } catch (e) {}
-  
-  // 2. Fallback to global window shim
-  if (!key) {
-    key = (window as any).process?.env?.API_KEY || "";
-  }
-  return key;
+  return (window as any).process?.env?.API_KEY || "";
 };
 
 export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): Promise<Prescription> => {
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API Key is missing.");
+  if (!apiKey) throw new Error("API Key is missing. Check your configuration.");
 
   const ai = new GoogleGenAI({ apiKey });
   const finalName = record.patientName || userInfo.name;
@@ -37,8 +25,8 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
     টেস্ট রিপোর্ট: ${JSON.stringify(record.tests.map(t => ({ name: t.name, result: t.result })))}
     ভাইটালস: রক্তচাপ: ${record.bp}, ডায়াবেটিস: ${record.diabetes}
 
-    কাজ: আপনি একজন বিশেষজ্ঞ ডাক্তার। রোগীর রোগ নির্ণয় করুন এবং একটি ডিজিটাল প্রেসক্রিপশন তৈরি করুন।
-    আউটপুট অবশ্যই JSON ফরম্যাটে হতে হবে যেখানে diagnosis, advice এবং medicines (ARRAY) থাকবে।
+    কাজ: আপনি একজন বিশেষজ্ঞ ডাক্তার। উপরের তথ্যের ভিত্তিতে রোগীর রোগ নির্ণয় করুন এবং একটি ডিজিটাল প্রেসক্রিপশন তৈরি করুন।
+    আউটপুট অবশ্যই JSON ফরম্যাটে হতে হবে।
   `;
 
   try {
@@ -72,9 +60,10 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
       }
     });
 
-    if (!response.text) throw new Error("AI returned empty text");
+    const text = response.text;
+    if (!text) throw new Error("AI returned no response.");
 
-    const result = JSON.parse(response.text.trim());
+    const result = JSON.parse(text.trim());
     return {
       id: Math.random().toString(36).substr(2, 9).toUpperCase(),
       userId: userInfo.id,
@@ -93,26 +82,29 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
 export const getMedicineInfo = async (query: string): Promise<string> => {
   const apiKey = getApiKey();
   if (!apiKey) return "সিস্টেম ত্রুটি: API Key পাওয়া যায়নি।";
+  
   const ai = new GoogleGenAI({ apiKey });
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `ঔষধ "${query}" এর কাজ এবং ব্যবহার বাংলায় বিস্তারিত লিখুন।`
+      contents: `ঔষধ "${query}" এর কাজ এবং ব্যবহার বাংলায় বিস্তারিত লিখুন যাতে সাধারণ মানুষ বুঝতে পারে।`
     });
     return response.text || 'দুঃখিত, কোনো তথ্য পাওয়া যায়নি।';
   } catch (error) {
-    return "দুঃখিত, সার্ভারে সমস্যা হচ্ছে।";
+    console.error("Medicine Info Error:", error);
+    return "দুঃখিত, তথ্য সংগ্রহে সমস্যা হয়েছে।";
   }
 };
 
 export const findAlternatives = async (query: string): Promise<any[]> => {
     const apiKey = getApiKey();
     if (!apiKey) return [];
+    
     const ai = new GoogleGenAI({ apiKey });
     try {
         const response = await ai.models.generateContent({
             model: "gemini-3-flash-preview",
-            contents: `"${query}" ঔষধের বাংলাদেশের সেরা বিকল্প ব্র্যান্ডগুলোর তালিকা JSON ফরম্যাটে দিন।`,
+            contents: `"${query}" ঔষধের বাংলাদেশের সেরা বিকল্প ব্র্যান্ডগুলোর একটি তালিকা JSON ফরম্যাটে দিন।`,
             config: {
                 responseMimeType: "application/json",
                 responseSchema: {
@@ -130,8 +122,11 @@ export const findAlternatives = async (query: string): Promise<any[]> => {
                 }
             }
         });
-        return JSON.parse(response.text.trim());
+        const text = response.text;
+        if (!text) return [];
+        return JSON.parse(text.trim());
     } catch (error) {
+        console.error("Alternatives Error:", error);
         return [];
     }
 };
