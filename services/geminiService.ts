@@ -2,16 +2,17 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { MedicalRecord, Prescription } from "../types";
 
-// The API key is obtained from the global process.env.API_KEY shimmed in index.html
-const getApiKey = () => {
-  return (window as any).process?.env?.API_KEY || "";
+// Always initialize with the shimmed process.env.API_KEY
+const initAI = () => {
+  const apiKey = (window as any).process?.env?.API_KEY || "";
+  if (!apiKey) {
+    console.error("Critical: API_KEY is missing from the environment.");
+  }
+  return new GoogleGenAI({ apiKey });
 };
 
 export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): Promise<Prescription> => {
-  const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API Key is missing. Check your configuration.");
-
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = initAI();
   const finalName = record.patientName || userInfo.name;
   const finalAge = record.patientAge || userInfo.age;
   const finalGender = record.patientGender || userInfo.gender;
@@ -80,10 +81,7 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
 };
 
 export const getMedicineInfo = async (query: string): Promise<string> => {
-  const apiKey = getApiKey();
-  if (!apiKey) return "সিস্টেম ত্রুটি: API Key পাওয়া যায়নি।";
-  
-  const ai = new GoogleGenAI({ apiKey });
+  const ai = initAI();
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -97,10 +95,7 @@ export const getMedicineInfo = async (query: string): Promise<string> => {
 };
 
 export const findAlternatives = async (query: string): Promise<any[]> => {
-    const apiKey = getApiKey();
-    if (!apiKey) return [];
-    
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = initAI();
     try {
         const response = await ai.models.generateContent({
             model: "gemini-3-flash-preview",

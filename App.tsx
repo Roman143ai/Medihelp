@@ -28,6 +28,7 @@ const App: React.FC = () => {
   const [adminSettings, setAdminSettings] = useState<AdminSettings>(DEFAULT_ADMIN_SETTINGS);
   const [priceList, setPriceList] = useState<MedicinePrice[]>([]);
 
+  // Initial data loading including Auth state
   useEffect(() => {
     const savedUsers = localStorage.getItem('mh_users');
     if (savedUsers) setUsers(JSON.parse(savedUsers));
@@ -43,6 +44,13 @@ const App: React.FC = () => {
 
     const savedPrices = localStorage.getItem('mh_prices');
     if (savedPrices) setPriceList(JSON.parse(savedPrices));
+
+    // Restore Auth Session
+    const savedUser = localStorage.getItem('mh_current_user');
+    if (savedUser) setCurrentUser(JSON.parse(savedUser));
+
+    const savedIsAdmin = localStorage.getItem('mh_is_admin');
+    if (savedIsAdmin === 'true') setIsAdmin(true);
   }, []);
 
   const saveUsers = (newUsers: User[]) => {
@@ -50,26 +58,41 @@ const App: React.FC = () => {
     localStorage.setItem('mh_users', JSON.stringify(newUsers));
   };
 
+  const handleLogin = (user: User) => {
+    if (user.id === '2' && user.password === '2') {
+      setIsAdmin(true);
+      localStorage.setItem('mh_is_admin', 'true');
+    } else {
+      setCurrentUser(user);
+      localStorage.setItem('mh_current_user', JSON.stringify(user));
+    }
+  };
+
+  const handleRegister = (user: User) => {
+    saveUsers([...users, user]);
+    setCurrentUser(user);
+    localStorage.setItem('mh_current_user', JSON.stringify(user));
+  };
+
   const handleLogout = () => {
     setCurrentUser(null);
     setIsAdmin(false);
+    localStorage.removeItem('mh_current_user');
+    localStorage.removeItem('mh_is_admin');
+  };
+
+  // Sync user changes to persistent storage if logged in
+  const updateCurrentUser = (updated: User) => {
+    setCurrentUser(updated);
+    localStorage.setItem('mh_current_user', JSON.stringify(updated));
   };
 
   if (!currentUser && !isAdmin) {
     return (
       <Login 
         users={users} 
-        onLogin={(user) => {
-          if (user.id === '2' && user.password === '2') {
-            setIsAdmin(true);
-          } else {
-            setCurrentUser(user);
-          }
-        }} 
-        onRegister={(user) => {
-          saveUsers([...users, user]);
-          setCurrentUser(user);
-        }}
+        onLogin={handleLogin} 
+        onRegister={handleRegister}
       />
     );
   }
@@ -107,7 +130,6 @@ const App: React.FC = () => {
           onUpdateUser={(updated, oldId) => {
             const targetId = oldId || updated.id;
             
-            // Uniqueness check for ID change
             if (oldId && oldId !== updated.id) {
               const exists = users.find(u => u.id === updated.id);
               if (exists) {
@@ -118,9 +140,8 @@ const App: React.FC = () => {
 
             const newUsers = users.map(u => u.id === targetId ? updated : u);
             saveUsers(newUsers);
-            setCurrentUser(updated);
+            updateCurrentUser(updated);
 
-            // Update orders if ID changed
             if (oldId && oldId !== updated.id) {
               const newOrders = orders.map(o => o.userId === oldId ? { ...o, userId: updated.id } : o);
               setOrders(newOrders);
