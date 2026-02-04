@@ -56,10 +56,6 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
   const [isCropping, setIsCropping] = useState(false);
 
-  const SLIDES_LINK = "https://docs.google.com/presentation/d/1Zx6gjOPPDPDaFo0-vrALBKkfjGb7wqRsKg7JhwTJyz0/edit?usp=sharing";
-  const SHEETS_LINK = "https://docs.google.com/spreadsheets/d/1YJmYfQMw1H8M4ocdaU5TDsPOJPwCTCJCS01z1wjP1U0/edit?usp=sharing";
-  const FORMS_LINK = "https://forms.gle/NpRPQHyxZNnMqMyx8";
-
   useEffect(() => {
     setTempUser(user);
   }, [user]);
@@ -93,8 +89,6 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
     if (tab !== activeTab) {
       window.history.pushState({ tab }, '');
       setActiveTab(tab);
-      // Clear current prescription when moving to other tabs, 
-      // EXCEPT when specifically viewing from history
       if (tab !== 'diagnosis') {
         setPrescription(null);
       }
@@ -105,16 +99,6 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
     window.history.pushState({ view: 'prescription' }, '');
     setPrescription(p);
     setActiveTab('diagnosis'); 
-  };
-
-  const startEditing = () => {
-    window.history.pushState({ view: 'editing' }, '');
-    setIsEditingProfile(true);
-  };
-
-  const startCropping = (img: string) => {
-    window.history.pushState({ view: 'cropping' }, '');
-    setImageToCrop(img);
   };
 
   // Loading message rotator
@@ -142,8 +126,6 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
     diabetes: ''
   });
 
-  const [currentTest, setCurrentTest] = useState({ name: '', result: '', image: '' });
-
   const handleDiagnosis = async () => {
     if (record.symptoms.length === 0 && !record.customSymptoms) {
       alert("অনুগ্রহ করে আপনার সমস্যার অন্তত একটি লক্ষণ সিলেক্ট করুন বা লিখে দিন।");
@@ -154,15 +136,14 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
       const result = await generateDiagnosis(record, user);
       if (result) {
         const currentPrescriptions = user.prescriptions || [];
-        // Limit history to 5 items, removing the oldest one (FIFO)
         const updatedPrescriptions = [result, ...currentPrescriptions].slice(0, 5);
         onUpdateUser({ ...user, prescriptions: updatedPrescriptions });
         setPrescription(result);
         setActiveTab('diagnosis');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Diagnosis Failed:", error);
-      alert("দুঃখিত, এআই সার্ভার থেকে উত্তর পাওয়া যাচ্ছে না। আপনার ইন্টারনেট কানেকশন চেক করে আবার চেষ্টা করুন।");
+      alert(error.message || "দুঃখিত, এআই সার্ভার থেকে উত্তর পাওয়া যাচ্ছে না। আপনার ইন্টারনেট কানেকশন চেক করে আবার চেষ্টা করুন।");
     } finally {
       setLoading(false);
     }
@@ -186,30 +167,16 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
     setIsCropping(false);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setCurrentTest({ ...currentTest, image: reader.result as string });
-      reader.readAsDataURL(file);
-    }
-  };
-
   const handleProfilePicSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        startCropping(reader.result as string);
+        setImageToCrop(reader.result as string);
+        window.history.pushState({ view: 'cropping' }, '');
       };
       reader.readAsDataURL(file);
     }
-  };
-
-  const handleAddTest = () => {
-    if (!currentTest.name) return;
-    setRecord({ ...record, tests: [...record.tests, currentTest] });
-    setCurrentTest({ name: '', result: '', image: '' });
   };
 
   const handleSaveProfile = () => {
@@ -301,10 +268,6 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
               <p className="text-lg font-bold text-red-600 min-h-[3rem] transition-all duration-500">
                 {LOADING_MESSAGES[loadingMsgIdx]}
               </p>
-            </div>
-
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 shadow-inner">
-               <p className="text-[10px] font-black text-slate-400 uppercase tracking-[.3em]">AI Medical Engine Active</p>
             </div>
           </div>
         </div>
@@ -419,8 +382,8 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
             <div className="bg-white border-2 border-slate-100 rounded-[40px] p-8 md:p-12 shadow-2xl relative overflow-hidden space-y-12">
                <ECGLine opacity="opacity-[0.05]" height="h-full" bold={true} />
                <section className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <FormInput label="রোগীর নাম" value={record.patientName || ''} onChange={v => setRecord({...record, patientName: v})} placeholder="নাম লিখুন" />
-                  <FormInput label="বয়স" value={record.patientAge || ''} onChange={v => setRecord({...record, patientAge: v})} placeholder="বয়স" />
+                  <FormInput label="রোগীর নাম" value={record.patientName || ''} onChange={(v: string) => setRecord({...record, patientName: v})} placeholder="নাম লিখুন" />
+                  <FormInput label="বয়স" value={record.patientAge || ''} onChange={(v: string) => setRecord({...record, patientAge: v})} placeholder="বয়স" />
                   <div className="space-y-1 bg-slate-50 p-4 rounded-3xl">
                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">লিঙ্গ</p>
                      <select className="w-full bg-transparent text-sm font-black outline-none" value={record.patientGender} onChange={e => setRecord({...record, patientGender: e.target.value})}>
@@ -457,26 +420,6 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
            <PrescriptionView prescription={prescription} user={user} settings={settings} />
         )}
 
-        {activeTab === 'history' && (
-           <div className="max-w-4xl mx-auto space-y-4 pb-20">
-              <div className="flex justify-between items-center bg-white p-6 rounded-[32px] shadow-sm border border-slate-100">
-                <h2 className="text-2xl font-black text-slate-900 flex items-center gap-3"><History size={28} className="text-red-600"/> প্রেসক্রিপশন হিস্ট্রি (সর্বশেষ ৫টি)</h2>
-              </div>
-              <div className="grid grid-cols-1 gap-4">
-                 {(!user.prescriptions || user.prescriptions.length === 0) ? <p className="p-20 text-center text-slate-400 font-bold">কোনো হিস্ট্রি পাওয়া যায়নি।</p> : user.prescriptions.map(p => (
-                   <div key={p.id} className="bg-white p-6 rounded-[32px] border border-slate-100 flex justify-between items-center">
-                      <div>
-                         <p className="text-xs font-black text-slate-400 uppercase mb-1">{p.date}</p>
-                         <p className="text-xl font-black text-slate-900">{p.diagnosis}</p>
-                      </div>
-                      <button onClick={() => showPrescription(p)} className="px-6 py-3 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest">দেখুন</button>
-                   </div>
-                 ))}
-              </div>
-           </div>
-        )}
-
-        {/* Other tabs like search, medInfo, shop, profile remain same but ensured to call changeTab */}
         {activeTab === 'search' && (
            <div className="max-w-4xl mx-auto space-y-6">
               <div className="bg-emerald-700 rounded-[40px] p-10 text-white shadow-2xl relative overflow-hidden">

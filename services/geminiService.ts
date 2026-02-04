@@ -6,8 +6,12 @@ import { MedicalRecord, Prescription } from "../types";
  * রোগের লক্ষণ বিশ্লেষণ করে ডিজিটাল প্রেসক্রিপশন তৈরি করে
  */
 export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): Promise<Prescription> => {
-  // Direct initialization with the shimmed key
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    throw new Error("এপিআই কী পাওয়া যায়নি। অনুগ্রহ করে সেটিংস চেক করুন।");
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
   
   const finalName = record.patientName || userInfo.name;
   const finalAge = record.patientAge || userInfo.age;
@@ -27,7 +31,7 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview", // Complex task demands Pro model
+      model: "gemini-3-flash-preview", 
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -59,7 +63,7 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
     });
 
     const text = response.text;
-    if (!text) throw new Error("AI returned empty text");
+    if (!text) throw new Error("এআই কোনো উত্তর প্রদান করেনি।");
 
     const result = JSON.parse(text);
     return {
@@ -71,9 +75,9 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
       date: new Date().toLocaleDateString('bn-BD'),
       ...result
     };
-  } catch (error) {
-    console.error("Diagnosis API Error:", error);
-    throw new Error("রোগ নির্ণয় করতে সমস্যা হয়েছে। দয়া করে আবার চেষ্টা করুন।");
+  } catch (error: any) {
+    console.error("AI Diagnosis Error:", error);
+    throw new Error("সার্ভার থেকে রেসপন্স পেতে সমস্যা হচ্ছে। দয়া করে কিছুক্ষণ পর আবার চেষ্টা করুন। " + (error.message || ""));
   }
 };
 
@@ -81,16 +85,19 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
  * ঔষধের কার্যকারিতা সম্পর্কে তথ্য দেয়
  */
 export const getMedicineInfo = async (query: string): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) return "এপিআই কী পাওয়া যায়নি।";
+
+  const ai = new GoogleGenAI({ apiKey });
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `ঔষধ "${query}" এর কাজ, ব্যবহার এবং সতর্কতা বাংলায় বিস্তারিত লিখুন যাতে সাধারণ মানুষ সহজে বুঝতে পারে।`
     });
     return response.text || 'দুঃখিত, কোনো তথ্য পাওয়া যায়নি।';
-  } catch (error) {
+  } catch (error: any) {
     console.error("Medicine Info Error:", error);
-    return "দুঃখিত, তথ্য সংগ্রহে সমস্যা হয়েছে। ইন্টারনেট চেক করুন।";
+    return "দুঃখিত, তথ্য সংগ্রহে সমস্যা হয়েছে। ইন্টারনেট কানেকশন চেক করুন। " + (error.message || "");
   }
 };
 
@@ -98,7 +105,10 @@ export const getMedicineInfo = async (query: string): Promise<string> => {
  * ঔষধের বিকল্প ব্র্যান্ড খুঁজে বের করে
  */
 export const findAlternatives = async (query: string): Promise<any[]> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) return [];
+
+    const ai = new GoogleGenAI({ apiKey });
     try {
         const response = await ai.models.generateContent({
             model: "gemini-3-flash-preview",
@@ -124,8 +134,8 @@ export const findAlternatives = async (query: string): Promise<any[]> => {
         const text = response.text;
         if (!text) return [];
         return JSON.parse(text);
-    } catch (error) {
-        console.error("Alternatives API Error:", error);
+    } catch (error: any) {
+        console.error("Alternatives Error:", error);
         return [];
     }
 };

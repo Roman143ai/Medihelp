@@ -10,15 +10,17 @@
     <!-- html2pdf.js for direct PDF downloads -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script>
-        // Critical: Strict Global Environment Shim for Production
+        // Enhanced Global Shim for Vercel/Production
         (function() {
-            const key = "AIzaSyBfbbCMILXCnI20QzuU6iARWPnFAwFyCps";
-            window.process = window.process || {};
+            var key = "AIzaSyBfbbCMILXCnI20QzuU6iARWPnFAwFyCps";
+            window.process = window.process || { env: {} };
             window.process.env = window.process.env || {};
-            window.process.env.API_KEY = key;
+            if (!window.process.env.API_KEY) {
+                window.process.env.API_KEY = key;
+            }
             window.global = window;
+            globalThis.process = window.process;
         })();
-        var process = window.process;
     </script>
     <style>
         :root {
@@ -40,7 +42,7 @@
         }
         .bento-card:hover {
             transform: translateY(-4px);
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
             border-color: rgba(239, 68, 68, 0.2);
         }
         .premium-input {
