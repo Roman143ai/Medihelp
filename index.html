@@ -7,25 +7,7 @@
     <title>Medi Help | Premium Health Care</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-    <!-- html2pdf.js for direct PDF downloads -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    <script>
-        /**
-         * Critical: Shim process.env for client-side Gemini SDK.
-         * Assume process.env.API_KEY is handled by the platform,
-         * but ensure a fallback for local or production script stability.
-         */
-        window.process = window.process || { env: {} };
-        window.process.env = window.process.env || {};
-        
-        // This key will be used if the environment doesn't provide one.
-        // On Vercel, ensure you add API_KEY to Environment Variables.
-        if (!window.process.env.API_KEY) {
-            window.process.env.API_KEY = "AIzaSyBfbbCMILXCnI20QzuU6iARWPnFAwFyCps";
-        }
-        window.global = window;
-        globalThis.process = window.process;
-    </script>
     <style>
         :root {
             --primary: #0f172a;
@@ -48,18 +30,6 @@
             transform: translateY(-4px);
             box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
             border-color: rgba(239, 68, 68, 0.2);
-        }
-        .premium-input {
-            background: #f1f5f9;
-            border: 2px solid transparent;
-            border-radius: 16px;
-            transition: all 0.3s ease;
-        }
-        .premium-input:focus {
-            background: white;
-            border-color: #ef4444;
-            box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.1);
-            outline: none;
         }
         @media print {
             .no-print { display: none !important; }

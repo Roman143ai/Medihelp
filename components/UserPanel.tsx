@@ -143,7 +143,7 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
       }
     } catch (error: any) {
       console.error("Diagnosis Failed:", error);
-      alert(error.message || "দুঃখিত, এআই সার্ভার থেকে উত্তর পাওয়া যাচ্ছে না। আপনার ইন্টারনেট কানেকশন চেক করে আবার চেষ্টা করুন।");
+      alert("এআই সার্ভার এরর: " + (error.message || "অজানা সমস্যা। দয়া করে ইন্টারনেট কানেকশন চেক করুন।"));
     } finally {
       setLoading(false);
     }
@@ -433,7 +433,7 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
                        try {
                          const alts = await findAlternatives(q);
                          setAlternatives(alts);
-                       } finally { setLoading(false); }
+                       } catch(e: any) { alert("এরর: " + e.message); } finally { setLoading(false); }
                     }} className="px-10 py-5 bg-white text-emerald-700 rounded-3xl font-black text-xs uppercase tracking-widest">অনুসন্ধান</button>
                  </div>
               </div>
@@ -465,7 +465,7 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
                        try {
                          const info = await getMedicineInfo(q);
                          setSearchResult(info);
-                       } finally { setLoading(false); }
+                       } catch(e: any) { alert("এরর: " + e.message); } finally { setLoading(false); }
                     }} className="px-10 py-5 bg-white text-blue-600 rounded-3xl font-black text-xs uppercase tracking-widest">তথ্য দেখুন</button>
                  </div>
               </div>
