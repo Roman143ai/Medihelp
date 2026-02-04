@@ -2,19 +2,22 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { MedicalRecord, Prescription } from "../types";
 
-// Enhanced API key retrieval for production environments
+// Robust API key retrieval
 const getApiKey = () => {
-  // Try standard process.env, then window shim fallback
-  const key = process.env.API_KEY || (window as any).process?.env?.API_KEY;
-  if (!key) {
-    console.error("Critical Error: Gemini API Key is missing.");
-  }
-  return key;
+  // Use a safe check to avoid ReferenceError if 'process' is not defined globally
+  try {
+    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+      return process.env.API_KEY;
+    }
+  } catch (e) {}
+  
+  // Fallback to window object shim
+  return (window as any).process?.env?.API_KEY || "";
 };
 
 export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): Promise<Prescription> => {
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API Key is missing.");
+  if (!apiKey) throw new Error("API Key is missing. Please check configuration.");
 
   const ai = new GoogleGenAI({ apiKey });
   const finalName = record.patientName || userInfo.name;
@@ -47,7 +50,7 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview", // Changed to flash for better reliability and speed
+      model: "gemini-3-flash-preview", 
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -77,7 +80,7 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
     });
 
     if (!response.text) {
-      throw new Error("Empty response from AI engine");
+      throw new Error("এআই সার্ভার থেকে কোনো তথ্য পাওয়া যায়নি।");
     }
 
     const result = JSON.parse(response.text.trim());
@@ -109,7 +112,7 @@ export const getMedicineInfo = async (query: string): Promise<string> => {
     return response.text || 'দুঃখিত, কোনো তথ্য পাওয়া যায়নি।';
   } catch (error) {
     console.error("Medicine Info Error:", error);
-    return "দুঃখিত, তথ্য আনতে সমস্যা হয়েছে। অনুগ্রহ করে ইন্টারনেট কানেকশন বা এপিআই কী চেক করুন।";
+    return "দুঃখিত, তথ্য আনতে সমস্যা হয়েছে। অনুগ্রহ করে ইন্টারনেট কানেকশন চেক করুন।";
   }
 };
 
