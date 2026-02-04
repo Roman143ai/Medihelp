@@ -2,22 +2,26 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { MedicalRecord, Prescription } from "../types";
 
-// Robust API key retrieval
+// Enhanced API key retrieval for production (Vercel/Browser)
 const getApiKey = () => {
-  // Use a safe check to avoid ReferenceError if 'process' is not defined globally
+  let key = "";
   try {
+    // 1. Try process.env
     if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-      return process.env.API_KEY;
+      key = process.env.API_KEY;
     }
   } catch (e) {}
   
-  // Fallback to window object shim
-  return (window as any).process?.env?.API_KEY || "";
+  // 2. Fallback to global window shim
+  if (!key) {
+    key = (window as any).process?.env?.API_KEY || "";
+  }
+  return key;
 };
 
 export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): Promise<Prescription> => {
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API Key is missing. Please check configuration.");
+  if (!apiKey) throw new Error("API Key is missing.");
 
   const ai = new GoogleGenAI({ apiKey });
   const finalName = record.patientName || userInfo.name;
@@ -33,19 +37,8 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
     টেস্ট রিপোর্ট: ${JSON.stringify(record.tests.map(t => ({ name: t.name, result: t.result })))}
     ভাইটালস: রক্তচাপ: ${record.bp}, ডায়াবেটিস: ${record.diabetes}
 
-    কাজ: আপনি একজন বিশেষজ্ঞ ডাক্তার। উপরের তথ্যের ভিত্তিতে রোগীর রোগ নির্ণয় করুন এবং একটি ডিজিটাল প্রেসক্রিপশন তৈরি করুন।
-    
-    নির্দেশনা:
-    ১. রোগ নির্ণয় (diagnosis) বাংলায় লিখুন।
-    ২. ঔষধের তালিকা (medicines) তৈরি করুন। প্রতিটির জন্য:
-       - englishName: ঔষধের নাম ইংরেজিতে।
-       - bengaliName: ঔষধের নাম বাংলায় (ব্র্যাকেটে ব্যবহারের জন্য)।
-       - genericName: ঔষধের জেনেরিক নাম।
-       - purpose: ঔষধটি কেন দেওয়া হয়েছে বা কি কাজ করবে তা বাংলায় লিখুন।
-       - dosage: ব্যবহারের নিয়ম (যেমন: ১+০+১ খাওয়ার পর) বাংলায় লিখুন।
-    ৩. সাধারণ পরামর্শ (advice) বাংলায় বিস্তারিত লিখুন।
-    
-    আউটপুট অবশ্যই JSON ফরম্যাটে হতে হবে।
+    কাজ: আপনি একজন বিশেষজ্ঞ ডাক্তার। রোগীর রোগ নির্ণয় করুন এবং একটি ডিজিটাল প্রেসক্রিপশন তৈরি করুন।
+    আউটপুট অবশ্যই JSON ফরম্যাটে হতে হবে যেখানে diagnosis, advice এবং medicines (ARRAY) থাকবে।
   `;
 
   try {
@@ -79,9 +72,7 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
       }
     });
 
-    if (!response.text) {
-      throw new Error("এআই সার্ভার থেকে কোনো তথ্য পাওয়া যায়নি।");
-    }
+    if (!response.text) throw new Error("AI returned empty text");
 
     const result = JSON.parse(response.text.trim());
     return {
@@ -102,29 +93,26 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
 export const getMedicineInfo = async (query: string): Promise<string> => {
   const apiKey = getApiKey();
   if (!apiKey) return "সিস্টেম ত্রুটি: API Key পাওয়া যায়নি।";
-
   const ai = new GoogleGenAI({ apiKey });
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `ঔষধের নাম: "${query}"। এই ঔষধটি কি কাজ করে এবং কেন ব্যবহার করা হয়? বিস্তারিত বাংলায় সুন্দর করে লিখুন যাতে সাধারণ মানুষ বুঝতে পারে।`
+      contents: `ঔষধ "${query}" এর কাজ এবং ব্যবহার বাংলায় বিস্তারিত লিখুন।`
     });
     return response.text || 'দুঃখিত, কোনো তথ্য পাওয়া যায়নি।';
   } catch (error) {
-    console.error("Medicine Info Error:", error);
-    return "দুঃখিত, তথ্য আনতে সমস্যা হয়েছে। অনুগ্রহ করে ইন্টারনেট কানেকশন চেক করুন।";
+    return "দুঃখিত, সার্ভারে সমস্যা হচ্ছে।";
   }
 };
 
 export const findAlternatives = async (query: string): Promise<any[]> => {
     const apiKey = getApiKey();
     if (!apiKey) return [];
-
     const ai = new GoogleGenAI({ apiKey });
     try {
         const response = await ai.models.generateContent({
             model: "gemini-3-flash-preview",
-            contents: `ঔষধের নাম বা জেনেরিক নাম: "${query}"। বাংলাদেশে পাওয়া যায় এমন প্রধান বিকল্প ঔষধগুলোর একটি তালিকা দিন। প্রতিটির ব্র্যান্ড নাম, জেনেরিক নাম, কোম্পানির নাম এবং আনুমানিক দাম বাংলায় দিন।`,
+            contents: `"${query}" ঔষধের বাংলাদেশের সেরা বিকল্প ব্র্যান্ডগুলোর তালিকা JSON ফরম্যাটে দিন।`,
             config: {
                 responseMimeType: "application/json",
                 responseSchema: {
@@ -142,11 +130,8 @@ export const findAlternatives = async (query: string): Promise<any[]> => {
                 }
             }
         });
-        
-        if (!response.text) return [];
         return JSON.parse(response.text.trim());
     } catch (error) {
-        console.error("Alternatives Error:", error);
         return [];
     }
 };
