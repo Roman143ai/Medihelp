@@ -1,12 +1,13 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { MedicalRecord, Prescription, MedicineItem } from "../types";
+import { MedicalRecord, Prescription } from "../types";
 
-// Helper to check if API key is present
+// Enhanced API key retrieval for production environments
 const getApiKey = () => {
-  const key = process.env.API_KEY;
+  // Try standard process.env, then window shim fallback
+  const key = process.env.API_KEY || (window as any).process?.env?.API_KEY;
   if (!key) {
-    console.error("Critical: API_KEY is missing from environment variables.");
+    console.error("Critical Error: Gemini API Key is missing.");
   }
   return key;
 };
@@ -46,7 +47,7 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview",
+      model: "gemini-3-flash-preview", // Changed to flash for better reliability and speed
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -75,7 +76,11 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
       }
     });
 
-    const result = JSON.parse(response.text || '{}');
+    if (!response.text) {
+      throw new Error("Empty response from AI engine");
+    }
+
+    const result = JSON.parse(response.text.trim());
     return {
       id: Math.random().toString(36).substr(2, 9).toUpperCase(),
       userId: userInfo.id,
@@ -86,7 +91,7 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
       ...result
     };
   } catch (error) {
-    console.error("Gemini API Error (generateDiagnosis):", error);
+    console.error("Diagnosis Error:", error);
     throw error;
   }
 };
@@ -99,12 +104,12 @@ export const getMedicineInfo = async (query: string): Promise<string> => {
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: ` ঔষধের নাম: "${query}"। এই ঔষধটি কি কাজ করে এবং কেন ব্যবহার করা হয়? বিস্তারিত বাংলায় সুন্দর করে লিখুন যাতে সাধারণ মানুষ বুঝতে পারে।`
+      contents: `ঔষধের নাম: "${query}"। এই ঔষধটি কি কাজ করে এবং কেন ব্যবহার করা হয়? বিস্তারিত বাংলায় সুন্দর করে লিখুন যাতে সাধারণ মানুষ বুঝতে পারে।`
     });
-    return response.text || 'কোনো তথ্য পাওয়া যায়নি।';
+    return response.text || 'দুঃখিত, কোনো তথ্য পাওয়া যায়নি।';
   } catch (error) {
-    console.error("Gemini API Error (getMedicineInfo):", error);
-    return "দুঃখিত, তথ্য আনতে সমস্যা হয়েছে। অনুগ্রহ করে ইন্টারনেট কানেকশন চেক করুন।";
+    console.error("Medicine Info Error:", error);
+    return "দুঃখিত, তথ্য আনতে সমস্যা হয়েছে। অনুগ্রহ করে ইন্টারনেট কানেকশন বা এপিআই কী চেক করুন।";
   }
 };
 
@@ -116,7 +121,7 @@ export const findAlternatives = async (query: string): Promise<any[]> => {
     try {
         const response = await ai.models.generateContent({
             model: "gemini-3-flash-preview",
-            contents: ` ঔষধের নাম বা জেনেরিক নাম: "${query}"। বাংলাদেশে পাওয়া যায় এমন প্রধান বিকল্প ঔষধগুলোর একটি তালিকা দিন। প্রতিটির ব্র্যান্ড নাম, জেনেরিক নাম, কোম্পানির নাম এবং আনুমানিক দাম বাংলায় দিন।`,
+            contents: `ঔষধের নাম বা জেনেরিক নাম: "${query}"। বাংলাদেশে পাওয়া যায় এমন প্রধান বিকল্প ঔষধগুলোর একটি তালিকা দিন। প্রতিটির ব্র্যান্ড নাম, জেনেরিক নাম, কোম্পানির নাম এবং আনুমানিক দাম বাংলায় দিন।`,
             config: {
                 responseMimeType: "application/json",
                 responseSchema: {
@@ -134,9 +139,11 @@ export const findAlternatives = async (query: string): Promise<any[]> => {
                 }
             }
         });
-        return JSON.parse(response.text || '[]');
+        
+        if (!response.text) return [];
+        return JSON.parse(response.text.trim());
     } catch (error) {
-        console.error("Gemini API Error (findAlternatives):", error);
+        console.error("Alternatives Error:", error);
         return [];
     }
 };

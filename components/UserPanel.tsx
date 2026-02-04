@@ -67,7 +67,6 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
   // Mobile Back Button Management
   useEffect(() => {
     const handleBackButton = (e: PopStateEvent) => {
-      // If modal/overlay is open, close it first
       if (imageToCrop) {
         setImageToCrop(null);
         return;
@@ -148,13 +147,15 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
     setLoading(true);
     try {
       const result = await generateDiagnosis(record, user);
-      const currentPrescriptions = user.prescriptions || [];
-      const updatedPrescriptions = [result, ...currentPrescriptions].slice(0, 10);
-      onUpdateUser({ ...user, prescriptions: updatedPrescriptions });
-      showPrescription(result);
+      if (result) {
+        const currentPrescriptions = user.prescriptions || [];
+        const updatedPrescriptions = [result, ...currentPrescriptions].slice(0, 10);
+        onUpdateUser({ ...user, prescriptions: updatedPrescriptions });
+        showPrescription(result);
+      }
     } catch (error) {
       console.error("Diagnosis Failed:", error);
-      alert("দুঃখিত, এআই সার্ভারের সাথে সংযোগ করতে সমস্যা হয়েছে। আপনার ইন্টারনেট কানেকশন অথবা এপিআই কি (API KEY) চেক করুন।");
+      alert("দুঃখিত, এআই সার্ভার থেকে উত্তর পাওয়া যাচ্ছে না। আপনার ইন্টারনেট কানেকশন চেক করে আবার চেষ্টা করুন।");
     } finally {
       setLoading(false);
     }
@@ -541,8 +542,14 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
                        const q = (document.getElementById('medQueryAlt') as HTMLInputElement).value;
                        if(!q) return;
                        setLoading(true);
-                       setAlternatives(await findAlternatives(q));
-                       setLoading(false);
+                       try {
+                         const alts = await findAlternatives(q);
+                         setAlternatives(alts);
+                       } catch (e) {
+                         alert("অনুসন্ধান করা যাচ্ছে না।");
+                       } finally {
+                         setLoading(false);
+                       }
                     }} disabled={loading} className="px-10 py-5 bg-white text-emerald-700 rounded-3xl font-black text-xs uppercase tracking-widest">অনুসন্ধান</button>
                  </div>
               </div>
@@ -571,8 +578,14 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
                        const q = (document.getElementById('medQueryInfo') as HTMLInputElement).value;
                        if(!q) return;
                        setLoading(true);
-                       setSearchResult(await getMedicineInfo(q));
-                       setLoading(false);
+                       try {
+                         const info = await getMedicineInfo(q);
+                         setSearchResult(info);
+                       } catch (e) {
+                         alert("তথ্য পাওয়া যাচ্ছে না।");
+                       } finally {
+                         setLoading(false);
+                       }
                     }} disabled={loading} className="px-10 py-5 bg-white text-blue-600 rounded-3xl font-black text-xs uppercase tracking-widest">তথ্য দেখুন</button>
                  </div>
               </div>
