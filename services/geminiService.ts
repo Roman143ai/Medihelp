@@ -2,11 +2,20 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { MedicalRecord, Prescription, MedicineItem } from "../types";
 
-// Always use a new instance of GoogleGenAI inside functions to ensure the latest API key is used
-// and to avoid issues with state if the API key changes.
+// Helper to check if API key is present
+const getApiKey = () => {
+  const key = process.env.API_KEY;
+  if (!key) {
+    console.error("Critical: API_KEY is missing from environment variables.");
+  }
+  return key;
+};
 
 export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): Promise<Prescription> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("API Key is missing.");
+
+  const ai = new GoogleGenAI({ apiKey });
   const finalName = record.patientName || userInfo.name;
   const finalAge = record.patientAge || userInfo.age;
   const finalGender = record.patientGender || userInfo.gender;
@@ -16,7 +25,7 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
     নাম: ${finalName}, বয়স: ${finalAge}, লিঙ্গ: ${finalGender}
     বর্তমান লক্ষণ: ${record.symptoms.join(", ")}, অন্যান্য: ${record.customSymptoms}
     পূর্ববর্তী রোগ: ${record.prevIllnesses.join(", ")}, অন্যান্য: ${record.customPrevIllnesses}
-    ব্যবহৃত ঔষধ: ${record.pastMeds}
+    ব্যব্যহৃত ঔষধ: ${record.pastMeds}
     টেস্ট রিপোর্ট: ${JSON.stringify(record.tests.map(t => ({ name: t.name, result: t.result })))}
     ভাইটালস: রক্তচাপ: ${record.bp}, ডায়াবেটিস: ${record.diabetes}
 
@@ -35,79 +44,99 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
     আউটপুট অবশ্যই JSON ফরম্যাটে হতে হবে।
   `;
 
-  // Using gemini-3-pro-preview for complex reasoning and medical diagnosis tasks
-  const response = await ai.models.generateContent({
-    model: "gemini-3-pro-preview",
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          diagnosis: { type: Type.STRING },
-          advice: { type: Type.STRING },
-          medicines: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                englishName: { type: Type.STRING },
-                bengaliName: { type: Type.STRING },
-                genericName: { type: Type.STRING },
-                purpose: { type: Type.STRING },
-                dosage: { type: Type.STRING }
-              },
-              required: ["englishName", "bengaliName", "genericName", "purpose", "dosage"]
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-pro-preview",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            diagnosis: { type: Type.STRING },
+            advice: { type: Type.STRING },
+            medicines: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  englishName: { type: Type.STRING },
+                  bengaliName: { type: Type.STRING },
+                  genericName: { type: Type.STRING },
+                  purpose: { type: Type.STRING },
+                  dosage: { type: Type.STRING }
+                },
+                required: ["englishName", "bengaliName", "genericName", "purpose", "dosage"]
+              }
             }
-          }
-        },
-        required: ["diagnosis", "advice", "medicines"]
+          },
+          required: ["diagnosis", "advice", "medicines"]
+        }
       }
-    }
-  });
+    });
 
-  const result = JSON.parse(response.text || '{}');
-  return {
-    id: Math.random().toString(36).substr(2, 9).toUpperCase(),
-    userId: userInfo.id,
-    patientName: finalName,
-    patientAge: finalAge,
-    patientGender: finalGender,
-    date: new Date().toLocaleDateString('bn-BD'),
-    ...result
-  };
+    const result = JSON.parse(response.text || '{}');
+    return {
+      id: Math.random().toString(36).substr(2, 9).toUpperCase(),
+      userId: userInfo.id,
+      patientName: finalName,
+      patientAge: finalAge,
+      patientGender: finalGender,
+      date: new Date().toLocaleDateString('bn-BD'),
+      ...result
+    };
+  } catch (error) {
+    console.error("Gemini API Error (generateDiagnosis):", error);
+    throw error;
+  }
 };
 
 export const getMedicineInfo = async (query: string): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: ` ঔষধের নাম: "${query}"। এই ঔষধটি কি কাজ করে এবং কেন ব্যবহার করা হয়? বিস্তারিত বাংলায় সুন্দর করে লিখুন যাতে সাধারণ মানুষ বুঝতে পারে।`
-  });
-  return response.text || '';
+  const apiKey = getApiKey();
+  if (!apiKey) return "সিস্টেম ত্রুটি: API Key পাওয়া যায়নি।";
+
+  const ai = new GoogleGenAI({ apiKey });
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: ` ঔষধের নাম: "${query}"। এই ঔষধটি কি কাজ করে এবং কেন ব্যবহার করা হয়? বিস্তারিত বাংলায় সুন্দর করে লিখুন যাতে সাধারণ মানুষ বুঝতে পারে।`
+    });
+    return response.text || 'কোনো তথ্য পাওয়া যায়নি।';
+  } catch (error) {
+    console.error("Gemini API Error (getMedicineInfo):", error);
+    return "দুঃখিত, তথ্য আনতে সমস্যা হয়েছে। অনুগ্রহ করে ইন্টারনেট কানেকশন চেক করুন।";
+  }
 };
 
 export const findAlternatives = async (query: string): Promise<any[]> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: ` ঔষধের নাম বা জেনেরিক নাম: "${query}"। বাংলাদেশে পাওয়া যায় এমন প্রধান বিকল্প ঔষধগুলোর একটি তালিকা দিন। প্রতিটির ব্র্যান্ড নাম, জেনেরিক নাম, কোম্পানির নাম এবং আনুমানিক দাম বাংলায় দিন।`,
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.ARRAY,
-                items: {
-                    type: Type.OBJECT,
-                    properties: {
-                        name: { type: Type.STRING },
-                        company: { type: Type.STRING },
-                        price: { type: Type.STRING },
-                        generic: { type: Type.STRING }
-                    },
-                    required: ["name", "company", "price", "generic"]
+    const apiKey = getApiKey();
+    if (!apiKey) return [];
+
+    const ai = new GoogleGenAI({ apiKey });
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-3-flash-preview",
+            contents: ` ঔষধের নাম বা জেনেরিক নাম: "${query}"। বাংলাদেশে পাওয়া যায় এমন প্রধান বিকল্প ঔষধগুলোর একটি তালিকা দিন। প্রতিটির ব্র্যান্ড নাম, জেনেরিক নাম, কোম্পানির নাম এবং আনুমানিক দাম বাংলায় দিন।`,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            name: { type: Type.STRING },
+                            company: { type: Type.STRING },
+                            price: { type: Type.STRING },
+                            generic: { type: Type.STRING }
+                        },
+                        required: ["name", "company", "price", "generic"]
+                    }
                 }
             }
-        }
-    });
-    return JSON.parse(response.text || '[]');
+        });
+        return JSON.parse(response.text || '[]');
+    } catch (error) {
+        console.error("Gemini API Error (findAlternatives):", error);
+        return [];
+    }
 };

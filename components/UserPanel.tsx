@@ -64,6 +64,55 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
     setTempUser(user);
   }, [user]);
 
+  // Mobile Back Button Management
+  useEffect(() => {
+    const handleBackButton = (e: PopStateEvent) => {
+      // If modal/overlay is open, close it first
+      if (imageToCrop) {
+        setImageToCrop(null);
+        return;
+      }
+      if (prescription) {
+        setPrescription(null);
+        return;
+      }
+      if (isEditingProfile) {
+        setIsEditingProfile(false);
+        return;
+      }
+      if (activeTab !== 'home') {
+        setActiveTab('home');
+        return;
+      }
+    };
+
+    window.addEventListener('popstate', handleBackButton);
+    return () => window.removeEventListener('popstate', handleBackButton);
+  }, [activeTab, prescription, isEditingProfile, imageToCrop]);
+
+  // Push state to history whenever a deeper UI state is entered
+  const changeTab = (tab: typeof activeTab) => {
+    if (tab !== activeTab) {
+      window.history.pushState({ tab }, '');
+      setActiveTab(tab);
+    }
+  };
+
+  const showPrescription = (p: Prescription) => {
+    window.history.pushState({ view: 'prescription' }, '');
+    setPrescription(p);
+  };
+
+  const startEditing = () => {
+    window.history.pushState({ view: 'editing' }, '');
+    setIsEditingProfile(true);
+  };
+
+  const startCropping = (img: string) => {
+    window.history.pushState({ view: 'cropping' }, '');
+    setImageToCrop(img);
+  };
+
   // Loading message rotator
   useEffect(() => {
     let interval: any;
@@ -102,11 +151,13 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
       const currentPrescriptions = user.prescriptions || [];
       const updatedPrescriptions = [result, ...currentPrescriptions].slice(0, 10);
       onUpdateUser({ ...user, prescriptions: updatedPrescriptions });
-      setPrescription(result);
+      showPrescription(result);
     } catch (error) {
-      alert("দুঃখিত, কোনো ত্রুটি হয়েছে। আবার চেষ্টা করুন।");
+      console.error("Diagnosis Failed:", error);
+      alert("দুঃখিত, এআই সার্ভারের সাথে সংযোগ করতে সমস্যা হয়েছে। আপনার ইন্টারনেট কানেকশন অথবা এপিআই কি (API KEY) চেক করুন।");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const onCropComplete = useCallback((_croppedArea: any, pixelCrop: any) => {
@@ -141,7 +192,7 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setImageToCrop(reader.result as string);
+        startCropping(reader.result as string);
       };
       reader.readAsDataURL(file);
     }
@@ -172,7 +223,7 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
           <div className="bg-white w-full max-w-lg rounded-[40px] overflow-hidden flex flex-col h-[80vh] shadow-2xl animate-in zoom-in-95 duration-300">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center">
                <h3 className="text-xl font-black text-slate-900 flex items-center gap-3"><Scissors size={20} className="text-red-600"/> ফটো ক্রপ করুন</h3>
-               <button onClick={() => setImageToCrop(null)} className="p-2 bg-slate-50 rounded-full text-slate-400 hover:text-slate-600 transition-all"><X size={20}/></button>
+               <button onClick={() => window.history.back()} className="p-2 bg-slate-50 rounded-full text-slate-400 hover:text-slate-600 transition-all"><X size={20}/></button>
             </div>
             
             <div className="flex-1 relative bg-slate-100">
@@ -208,7 +259,7 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
                </div>
                
                <div className="flex gap-4">
-                  <button onClick={() => setImageToCrop(null)} className="flex-1 py-5 bg-slate-100 text-slate-600 rounded-[20px] font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all">বাতিল</button>
+                  <button onClick={() => window.history.back()} className="flex-1 py-5 bg-slate-100 text-slate-600 rounded-[20px] font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all">বাতিল</button>
                   <button onClick={handleSaveCroppedImage} disabled={isCropping} className="flex-1 py-5 bg-red-600 text-white rounded-[20px] font-black text-xs uppercase tracking-widest shadow-xl shadow-red-200 hover:bg-red-700 transition-all flex items-center justify-center gap-2">
                      {isCropping ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16}/>}
                      {isCropping ? 'প্রসেসিং...' : 'সেভ করুন'}
@@ -267,7 +318,7 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 text-white text-[8px] font-black rounded-full flex items-center justify-center">{repliedOrders.length}</span>
                </div>
              )}
-             <button onClick={() => setActiveTab('profile')} className="flex items-center gap-2 p-1 bg-slate-100 rounded-full border border-slate-200 hover:bg-white transition-all relative overflow-hidden group">
+             <button onClick={() => changeTab('profile')} className="flex items-center gap-2 p-1 bg-slate-100 rounded-full border border-slate-200 hover:bg-white transition-all relative overflow-hidden group">
                 <ECGLine opacity="opacity-10" height="h-full" />
                 {user.profilePic ? (
                   <img src={user.profilePic} className="w-7 h-7 rounded-full object-cover relative z-10" />
@@ -304,7 +355,7 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-               <div onClick={() => setActiveTab('diagnosis')} className="col-span-2 md:col-span-3 rounded-[32px] p-7 bg-white text-slate-900 border-2 border-slate-100 cursor-pointer group flex flex-col justify-between min-h-[200px] shadow-2xl relative overflow-hidden transition-all duration-500 hover:scale-[1.02] active:scale-95">
+               <div onClick={() => changeTab('diagnosis')} className="col-span-2 md:col-span-3 rounded-[32px] p-7 bg-white text-slate-900 border-2 border-slate-100 cursor-pointer group flex flex-col justify-between min-h-[200px] shadow-2xl relative overflow-hidden transition-all duration-500 hover:scale-[1.02] active:scale-95">
                   <ECGLine opacity="opacity-15" height="h-full" bold={true} />
                   <div className="relative z-10 flex justify-between items-start">
                     <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center shadow-sm border border-red-100 group-hover:bg-red-600 group-hover:text-white transition-all duration-500"><Stethoscope size={28} /></div>
@@ -319,12 +370,12 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
                   <div className="absolute bottom-6 right-6 w-12 h-12 bg-red-600 text-white rounded-full flex items-center justify-center shadow-lg group-hover:scale-125 transition-all duration-300"><ArrowRight size={24} /></div>
                </div>
                
-               <CompactBento icon={<History />} title="প্রেসক্রিপশন হিস্ট্রি" color="text-red-500 bg-red-50" onClick={() => setActiveTab('history')} />
-               <CompactBento icon={<Search />} title="বিকল্প ঔষধ" color="text-emerald-500 bg-emerald-50" onClick={() => setActiveTab('search')} />
-               <CompactBento icon={<Info />} title="ঔষধের কাজ" color="text-blue-500 bg-blue-50" onClick={() => setActiveTab('medInfo')} />
-               <CompactBento icon={<ShoppingBag />} title="ঔষধ অর্ডার" color="text-purple-500 bg-purple-50" onClick={() => setActiveTab('shop')} />
-               <CompactBento icon={<CreditCard />} title="মূল্য তালিকা" color="text-orange-500 bg-orange-50" onClick={() => setActiveTab('prices')} />
-               <CompactBento icon={<Gift />} title="অফার ও আপডেট" color="text-rose-500 bg-rose-50" onClick={() => setActiveTab('updates')} />
+               <CompactBento icon={<History />} title="প্রেসক্রিপশন হিস্ট্রি" color="text-red-500 bg-red-50" onClick={() => changeTab('history')} />
+               <CompactBento icon={<Search />} title="বিকল্প ঔষধ" color="text-emerald-500 bg-emerald-50" onClick={() => changeTab('search')} />
+               <CompactBento icon={<Info />} title="ঔষধের কাজ" color="text-blue-500 bg-blue-50" onClick={() => changeTab('medInfo')} />
+               <CompactBento icon={<ShoppingBag />} title="ঔষধ অর্ডার" color="text-purple-500 bg-purple-50" onClick={() => changeTab('shop')} />
+               <CompactBento icon={<CreditCard />} title="মূল্য তালিকা" color="text-orange-500 bg-orange-50" onClick={() => changeTab('prices')} />
+               <CompactBento icon={<Gift />} title="অফার ও আপডেট" color="text-rose-500 bg-rose-50" onClick={() => changeTab('updates')} />
             </div>
 
             {/* Notifications / Orders Reply Section */}
@@ -370,7 +421,7 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
           <div className="max-w-4xl mx-auto space-y-12 pb-20">
              <div className="flex justify-between items-center bg-white p-6 rounded-[32px] shadow-sm border border-slate-100">
                <h2 className="text-2xl font-black flex items-center gap-3"><Stethoscope size={28} className="text-red-600"/> রোগের লক্ষণ ও তথ্য প্রদান করুন</h2>
-               <button onClick={() => setActiveTab('home')} className="p-2 bg-slate-50 rounded-full text-slate-400 hover:text-slate-600 transition-all"><X size={20}/></button>
+               <button onClick={() => window.history.back()} className="p-2 bg-slate-50 rounded-full text-slate-400 hover:text-slate-600 transition-all"><X size={20}/></button>
             </div>
             
             <div className="bg-white border-2 border-slate-100 rounded-[40px] p-8 md:p-12 shadow-2xl relative overflow-hidden space-y-12">
@@ -597,7 +648,7 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
                  </div>
                  <h3 className="text-2xl font-black text-slate-900 mb-1">{tempUser.name}</h3>
                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[.4em]">UID: {tempUser.id}</p>
-                 <button onClick={isEditingProfile ? handleSaveProfile : () => setIsEditingProfile(true)} className="w-full mt-10 py-5 rounded-3xl font-black text-xs uppercase bg-slate-100 text-slate-600 shadow-xl transition-all">
+                 <button onClick={isEditingProfile ? handleSaveProfile : startEditing} className="w-full mt-10 py-5 rounded-3xl font-black text-xs uppercase bg-slate-100 text-slate-600 shadow-xl transition-all">
                     {isEditingProfile ? 'প্রোফাইল সেভ করুন' : 'প্রোফাইল এডিট করুন'}
                  </button>
               </div>
@@ -640,7 +691,7 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
                          <p className="text-xs font-black text-slate-400 uppercase mb-1">{p.date}</p>
                          <p className="text-xl font-black text-slate-900">{p.diagnosis}</p>
                       </div>
-                      <button onClick={() => { setPrescription(p); setActiveTab('diagnosis'); }} className="px-6 py-3 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest">দেখুন</button>
+                      <button onClick={() => showPrescription(p)} className="px-6 py-3 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest">দেখুন</button>
                    </div>
                  ))}
               </div>
@@ -670,10 +721,10 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
       {/* Navigation */}
       <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-2xl border border-slate-200 p-2 rounded-full shadow-2xl flex gap-1 z-[100] no-print">
          <NavItem active={activeTab === 'home'} icon={<Home size={20}/>} label="Home" onClick={() => { setActiveTab('home'); setPrescription(null); }} />
-         <NavItem active={activeTab === 'diagnosis'} icon={<Stethoscope size={20}/>} label="Check" onClick={() => setActiveTab('diagnosis')} />
-         <NavItem active={activeTab === 'shop'} icon={<ShoppingBag size={20}/>} label="Shop" onClick={() => setActiveTab('shop')} />
-         <NavItem active={activeTab === 'medInfo'} icon={<Info size={20}/>} label="Info" onClick={() => setActiveTab('medInfo')} />
-         <NavItem active={activeTab === 'search'} icon={<Search size={20}/>} label="Search" onClick={() => setActiveTab('search')} />
+         <NavItem active={activeTab === 'diagnosis'} icon={<Stethoscope size={20}/>} label="Check" onClick={() => changeTab('diagnosis')} />
+         <NavItem active={activeTab === 'shop'} icon={<ShoppingBag size={20}/>} label="Shop" onClick={() => changeTab('shop')} />
+         <NavItem active={activeTab === 'medInfo'} icon={<Info size={20}/>} label="Info" onClick={() => changeTab('medInfo')} />
+         <NavItem active={activeTab === 'search'} icon={<Search size={20}/>} label="Search" onClick={() => changeTab('search')} />
       </nav>
     </div>
   );

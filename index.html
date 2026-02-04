@@ -10,12 +10,15 @@
     <!-- html2pdf.js for direct PDF downloads -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script>
-        // Shim for process.env to prevent ReferenceErrors in the browser
-        window.process = {
-            env: {
-                API_KEY: "" // Will be injected by the environment
+        // Enhanced shim for process.env to prevent ReferenceErrors and handle API_KEY
+        (function() {
+            window.process = window.process || {};
+            window.process.env = window.process.env || {};
+            // Ensure API_KEY exists as a string if not provided by build system
+            if (typeof window.process.env.API_KEY === 'undefined') {
+                window.process.env.API_KEY = "";
             }
-        };
+        })();
     </script>
     <style>
         :root {
