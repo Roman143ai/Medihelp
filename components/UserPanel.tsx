@@ -140,7 +140,37 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
       }
     } catch (error: any) {
       console.error("Diagnosis Failed:", error);
-      setErrorMsg(error.message || "এআই সার্ভিস থেকে কোনো রেসপন্স পাওয়া যায়নি।");
+      setErrorMsg(error.message || "এআই সার্ভিস থেকে কোনো রেসপন্স পাওয়া যায়নি। আপনার ইন্টারনেট চেক করুন।");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMedInfo = async () => {
+    const q = (document.getElementById('medQueryInfo') as HTMLInputElement).value;
+    if(!q) return;
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      const info = await getMedicineInfo(q);
+      setSearchResult(info);
+    } catch(e: any) {
+      setErrorMsg("তথ্য সংগ্রহে সমস্যা হয়েছে।");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSearchAlternatives = async () => {
+    const q = (document.getElementById('medQueryAlt') as HTMLInputElement).value;
+    if(!q) return;
+    setLoading(true);
+    setErrorMsg(null);
+    try {
+      const alts = await findAlternatives(q);
+      setAlternatives(alts);
+    } catch(e: any) {
+      setErrorMsg("বিকল্প ঔষধ খুঁজে পাওয়া যায়নি।");
     } finally {
       setLoading(false);
     }
@@ -382,7 +412,7 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
                  <div>
                     <h4 className="text-lg font-black text-red-900">সমস্যা হয়েছে!</h4>
                     <p className="text-red-700 font-bold text-sm leading-relaxed">{errorMsg}</p>
-                    <p className="text-xs text-red-500 mt-2">আপনি কি ভেরসেল ড্যাশবোর্ড থেকে API_KEY সেট করেছেন?</p>
+                    <p className="text-xs text-red-500 mt-2">ভেরসেল ড্যাশবোর্ড থেকে API_KEY সেট করা আছে কি না তা যাচাই করুন।</p>
                  </div>
               </div>
             )}
@@ -428,7 +458,66 @@ const UserPanel: React.FC<UserPanelProps> = ({ user, settings, priceList, orders
            <PrescriptionView prescription={prescription} user={user} settings={settings} />
         )}
 
-        {/* Other tabs follow... */}
+        {activeTab === 'search' && (
+           <div className="max-w-4xl mx-auto space-y-6">
+              <div className="bg-emerald-700 rounded-[40px] p-10 text-white shadow-2xl relative overflow-hidden">
+                 <h2 className="text-3xl font-black mb-6 relative z-10">বিকল্প ঔষধ অনুসন্ধান</h2>
+                 <div className="flex flex-col sm:flex-row gap-3 relative z-10">
+                    <input id="medQueryAlt" className="flex-1 p-5 bg-white/10 border border-white/20 rounded-3xl text-lg font-bold outline-none placeholder:text-white/30" placeholder="ঔষধ বা জেনেরিক নাম লিখুন..." />
+                    <button onClick={handleSearchAlternatives} className="px-10 py-5 bg-white text-emerald-700 rounded-3xl font-black text-xs uppercase tracking-widest">অনুসন্ধান</button>
+                 </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 {alternatives.map((alt, i) => (
+                    <div key={i} className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm">
+                       <p className="text-xl font-black text-slate-900 mb-1">{alt.name}</p>
+                       <p className="text-xs font-black text-emerald-600 uppercase mb-2">{alt.generic}</p>
+                       <div className="flex justify-between items-center pt-4 border-t border-slate-100">
+                          <p className="text-sm font-bold text-slate-500">{alt.company}</p>
+                          <p className="text-lg font-black text-slate-900">৳{alt.price}</p>
+                       </div>
+                    </div>
+                 ))}
+              </div>
+           </div>
+        )}
+
+        {activeTab === 'medInfo' && (
+           <div className="max-w-4xl mx-auto space-y-6">
+              <div className="bg-blue-600 rounded-[40px] p-10 text-white shadow-2xl relative overflow-hidden">
+                 <h2 className="text-3xl font-black mb-6 relative z-10">ঔষধের কাজ জানুন</h2>
+                 <div className="flex flex-col sm:flex-row gap-3 relative z-10">
+                    <input id="medQueryInfo" className="flex-1 p-5 bg-white/10 border border-white/20 rounded-3xl text-lg font-bold outline-none placeholder:text-white/30" placeholder="ঔষধের নাম লিখুন..." />
+                    <button onClick={handleMedInfo} className="px-10 py-5 bg-white text-blue-600 rounded-3xl font-black text-xs uppercase tracking-widest">তথ্য দেখুন</button>
+                 </div>
+              </div>
+              {searchResult && <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm text-lg font-medium leading-relaxed whitespace-pre-wrap">{searchResult}</div>}
+           </div>
+        )}
+
+        {/* History Tab */}
+        {activeTab === 'history' && (
+           <div className="max-w-4xl mx-auto space-y-6">
+              <h2 className="text-2xl font-black flex items-center gap-3"><History size={28} className="text-red-600"/> পূর্ববর্তী প্রেসক্রিপশনসমূহ</h2>
+              <div className="grid gap-4">
+                 {user.prescriptions?.map((p, i) => (
+                    <div key={i} onClick={() => setPrescription(p)} className="bg-white p-6 rounded-[32px] border border-slate-200 shadow-sm flex justify-between items-center cursor-pointer hover:border-red-600 transition-all">
+                       <div>
+                          <p className="text-lg font-black text-slate-900">{p.diagnosis}</p>
+                          <p className="text-xs font-bold text-slate-500">{p.date}</p>
+                       </div>
+                       <ChevronRight className="text-slate-300" />
+                    </div>
+                 ))}
+                 {(!user.prescriptions || user.prescriptions.length === 0) && (
+                    <div className="text-center py-20 opacity-30">
+                       <FileText size={48} className="mx-auto mb-4" />
+                       <p className="font-black uppercase tracking-widest text-xs">কোনো রেকর্ড নেই</p>
+                    </div>
+                 )}
+              </div>
+           </div>
+        )}
       </main>
 
       {/* Navigation */}

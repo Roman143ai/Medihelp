@@ -3,23 +3,21 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { MedicalRecord, Prescription } from "../types";
 
 /**
- * AI Initialization Helper
- */
-const getAIClient = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    throw new Error("এপিআই কী (API Key) সেট করা নেই। ভেরসেল সেটিংস থেকে API_KEY যোগ করুন।");
-  }
-  return new GoogleGenAI({ apiKey });
-};
-
-/**
- * জেসন আউটপুট থেকে মার্কডাউন এবং অতিরিক্ত টেক্সট সরানোর হেল্পার
+ * জেসন আউটপুট ক্লিন করার ফাংশন
  */
 const cleanJSON = (str: string): string => {
   try {
-    const match = str.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
-    return match ? match[0] : str;
+    const start = str.indexOf('{');
+    const end = str.lastIndexOf('}');
+    if (start !== -1 && end !== -1) {
+      return str.substring(start, end + 1);
+    }
+    const arrStart = str.indexOf('[');
+    const arrEnd = str.lastIndexOf(']');
+    if (arrStart !== -1 && arrEnd !== -1) {
+      return str.substring(arrStart, arrEnd + 1);
+    }
+    return str;
   } catch (e) {
     return str;
   }
@@ -29,34 +27,35 @@ const cleanJSON = (str: string): string => {
  * রোগের লক্ষণ বিশ্লেষণ করে ডিজিটাল প্রেসক্রিপশন তৈরি করে
  */
 export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): Promise<Prescription> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+  
+  const finalName = record.patientName || userInfo.name;
+  const finalAge = record.patientAge || userInfo.age;
+  const finalGender = record.patientGender || userInfo.gender;
+
+  const prompt = `
+    রোগীর প্রোফাইল:
+    নাম: ${finalName}, বয়স: ${finalAge}, লিঙ্গ: ${finalGender}
+    লক্ষণসমূহ: ${record.symptoms.join(", ")}, ${record.customSymptoms}
+    পূর্ববর্তী অসুস্থতা: ${record.prevIllnesses.join(", ")}, ${record.customPrevIllnesses}
+    বর্তমান ঔষধ: ${record.pastMeds}
+    ভাইটালস: রক্তচাপ: ${record.bp}, ডায়াবেটিস: ${record.diabetes}
+
+    কাজ: আপনি একজন ডিজিটাল বিশেষজ্ঞ ডাক্তার। উপরের লক্ষণগুলো বিশ্লেষণ করে একটি রোগ নির্ণয় এবং একটি ডিজিটাল প্রেসক্রিপশন তৈরি করুন।
+    শুধুমাত্র নিচের JSON স্কিমা অনুযায়ী উত্তর দিন। কোনো ব্যাখ্যা বা অতিরিক্ত কথা দিবেন না।
+  `;
+
   try {
-    const ai = getAIClient();
-    
-    const finalName = record.patientName || userInfo.name;
-    const finalAge = record.patientAge || userInfo.age;
-    const finalGender = record.patientGender || userInfo.gender;
-
-    const prompt = `
-      একজন বিশেষজ্ঞ ডাক্তার হিসেবে নিচের তথ্যের ভিত্তিতে একটি ডিজিটাল প্রেসক্রিপশন তৈরি করুন:
-      রোগীর নাম: ${finalName}, বয়স: ${finalAge}, লিঙ্গ: ${finalGender}
-      লক্ষণসমূহ: ${record.symptoms.join(", ")}, ${record.customSymptoms}
-      পূর্ববর্তী রোগ: ${record.prevIllnesses.join(", ")}, ${record.customPrevIllnesses}
-      বর্তমান ঔষধ: ${record.pastMeds}
-      ভাইটালস: বিপি: ${record.bp}, ডায়াবেটিস: ${record.diabetes}
-
-      আউটপুট অবশ্যই শুধুমাত্র JSON ফরম্যাটে হতে হবে।
-    `;
-
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview", 
+      model: 'gemini-3-flash-preview', 
       contents: [{ parts: [{ text: prompt }] }],
       config: {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            diagnosis: { type: Type.STRING },
-            advice: { type: Type.STRING },
+            diagnosis: { type: Type.STRING, description: "রোগের সম্ভাব্য নাম" },
+            advice: { type: Type.STRING, description: "রোগীর জন্য ডাক্তারের উপদেশ" },
             medicines: {
               type: Type.ARRAY,
               items: {
@@ -92,8 +91,8 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
       ...result
     };
   } catch (error: any) {
-    console.error("Diagnosis Error:", error);
-    throw new Error(error.message || "এআই সার্ভিস কাজ করছে না। অনুগ্রহ করে কিছুক্ষণ পর আবার চেষ্টা করুন।");
+    console.error("Diagnosis Generation Failed:", error);
+    throw new Error("এআই এর মাধ্যমে রোগ নির্ণয় করা সম্ভব হয়নি। আপনার ইন্টারনেট কানেকশন এবং এপিআই কী সেটিংস চেক করুন।");
   }
 };
 
@@ -101,16 +100,16 @@ export const generateDiagnosis = async (record: MedicalRecord, userInfo: any): P
  * ঔষধের কার্যকারিতা সম্পর্কে তথ্য দেয়
  */
 export const getMedicineInfo = async (query: string): Promise<string> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
   try {
-    const ai = getAIClient();
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: [{ parts: [{ text: `ঔষধ "${query}" এর কাজ, ব্যবহার এবং সতর্কতা বাংলায় বিস্তারিত লিখুন।` }] }]
+      model: 'gemini-3-flash-preview',
+      contents: [{ parts: [{ text: `"${query}" ঔষধটির কাজ, ব্যবহারের নিয়ম এবং বিশেষ সতর্কতা বাংলায় বিস্তারিত পয়েন্ট আকারে লিখুন।` }] }]
     });
-    return response.text || 'কোনো তথ্য পাওয়া যায়নি।';
+    return response.text || 'দুঃখিত, কোনো তথ্য পাওয়া যায়নি।';
   } catch (error: any) {
-    console.error("Medicine Info Error:", error);
-    return "তথ্য সংগ্রহ করা সম্ভব হয়নি: " + (error.message || "");
+    console.error("Medicine Info Fetch Failed:", error);
+    return "তথ্য সংগ্রহ করতে সমস্যা হয়েছে।";
   }
 };
 
@@ -118,10 +117,10 @@ export const getMedicineInfo = async (query: string): Promise<string> => {
  * ঔষধের বিকল্প ব্র্যান্ড খুঁজে বের করে
  */
 export const findAlternatives = async (query: string): Promise<any[]> => {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
     try {
-        const ai = getAIClient();
         const response = await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: 'gemini-3-flash-preview',
             contents: [{ parts: [{ text: `"${query}" ঔষধের বাংলাদেশের সেরা বিকল্প ব্র্যান্ডগুলোর একটি তালিকা জেসন ফরম্যাটে দিন।` }] }],
             config: {
                 responseMimeType: "application/json",
@@ -144,7 +143,7 @@ export const findAlternatives = async (query: string): Promise<any[]> => {
         if (!text) return [];
         return JSON.parse(cleanJSON(text));
     } catch (error: any) {
-        console.error("Alternatives Error:", error);
+        console.error("Alternatives Fetch Failed:", error);
         return [];
     }
 };
